@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ketelhuis AR | Live Log Monitor</title>
+    <style>
+        :root {
+            --bg: #050816;
+            --panel: rgba(10, 15, 28, 0.94);
+            --panel-soft: rgba(15, 23, 42, 0.92);
+            --line: rgba(148, 163, 184, 0.18);
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --green: #10b981;
+            --red: #ef4444;
+            --cold: #3b82f6;
+            --accent: #f59e0b;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            min-height: 100%;
+            background:
+                radial-gradient(circle at top left, rgba(245, 158, 11, 0.16), transparent 28%),
+                radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.10), transparent 26%),
+                linear-gradient(180deg, #02040c 0%, #050816 100%);
+            color: var(--text);
+            font-family: Georgia, 'Times New Roman', serif;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 42px 42px;
+            mask-image: radial-gradient(circle at center, black 0%, transparent 85%);
+            opacity: 0.5;
+        }
+
+        .page {
+            position: relative;
+            min-height: 100vh;
+            padding: 20px;
+            display: grid;
+            gap: 16px;
+        }
+
+        .topbar,
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(14px);
+        }
+
+        .topbar {
+            padding: 18px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .title {
+            font-size: clamp(1.4rem, 2.2vw, 2rem);
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 0.92rem;
+            margin-top: 6px;
+        }
+
+        .status-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            padding: 9px 14px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            font-size: 0.84rem;
+            color: var(--text);
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: var(--muted);
+            box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.12);
+        }
+
+        .dot.active { background: var(--green); box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.14); }
+        .dot.idle { background: var(--muted); }
+        .dot.completed { background: var(--accent); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.12); }
+
+        .grid {
+            display: grid;
+            grid-template-columns: minmax(0, 2.15fr) minmax(290px, 0.85fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .panel {
+            padding: 16px;
+        }
+
+        .panel h2 {
+            margin: 0 0 12px;
+            font-size: 0.92rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #cbd5e1;
+        }
+
+        .graph-wrap {
+            position: relative;
+            height: min(62vh, 560px);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: 14px;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.98));
+            border: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .metric {
+            padding: 12px;
+            background: var(--panel-soft);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            border-radius: 14px;
+        }
+
+        .metric .label {
+            color: var(--muted);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .metric .value {
+            margin-top: 6px;
+            font-size: 1.05rem;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+
+        .details {
+            margin-top: 12px;
+            padding: 12px;
+            background: var(--panel-soft);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            border-radius: 14px;
+            color: var(--muted);
+            font-size: 0.86rem;
+            line-height: 1.5;
+            word-break: break-word;
+        }
+
+        .zones {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .zone-chip {
+            border-radius: 999px;
+            padding: 7px 11px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            border: 1px solid rgba(255,255,255,0.12);
+        }
+
+        .zone-chip.green { background: rgba(16, 185, 129, 0.14); color: #a7f3d0; }
+        .zone-chip.red { background: rgba(239, 68, 68, 0.14); color: #fecaca; }
+        .zone-chip.cold { background: rgba(59, 130, 246, 0.16); color: #bfdbfe; }
+
+        .empty {
+            padding: 22px;
+            text-align: center;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        @media (max-width: 920px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .graph-wrap {
+                height: min(52vh, 420px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <section class="topbar">
+            <div>
+                <div class="title">Live Log Monitor</div>
+                <div id="subtitle" class="subtitle">Waiting for a logging session to start.</div>
+            </div>
+            <div class="status-row">
+                <div class="pill"><span id="status-dot" class="dot idle"></span><span id="status-text">Idle</span></div>
+                <div class="pill" id="session-pill">Session: none</div>
+                <div class="pill" id="sample-pill">Samples: 0</div>
+            </div>
+        </section>
+
+        <section class="grid">
+            <article class="panel">
+                <h2>Live Graph</h2>
+                <div class="graph-wrap">
+                    <canvas id="graph" width="1200" height="720"></canvas>
+                </div>
+            </article>
+
+            <aside class="panel">
+                <h2>Live Metrics</h2>
+                <div class="metrics" id="metrics"></div>
+                <div class="zones" aria-label="Zones">
+                    <span class="zone-chip cold">Cold</span>
+                    <span class="zone-chip green">Green</span>
+                    <span class="zone-chip red">Red</span>
+                </div>
+                <div class="details" id="details">Open this page on a tablet while logging is running.</div>
+            </aside>
+        </section>
+    </main>
+
+    <script>
+        const serverBaseUrl = window.location.origin && window.location.origin !== 'null'
+            ? window.location.origin
+            : `https://${window.location.hostname}:3000`;
+
+        const graphCanvas = document.getElementById('graph');
+        const subtitle = document.getElementById('subtitle');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        const sessionPill = document.getElementById('session-pill');
+        const samplePill = document.getElementById('sample-pill');
+        const metrics = document.getElementById('metrics');
+        const details = document.getElementById('details');
+
+        const DANGER_THRESHOLD = 80;
+        const COLD_THRESHOLD = 30;
+
+        function formatDuration(ms) {
+            const totalSeconds = Math.max(0, ms) / 1000;
+
+            if (totalSeconds < 60) {
+                return `${totalSeconds.toFixed(totalSeconds < 10 ? 1 : 0)}s`;
+            }
+
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = (totalSeconds % 60).toFixed(1).padStart(4, '0');
+            return `${minutes}m ${seconds}s`;
+        }
+
+        function getZone(pressure) {
+            if (pressure >= DANGER_THRESHOLD) return 'red';
+            if (pressure <= COLD_THRESHOLD) return 'cold';
+            return 'green';
+        }
+
+        function formatAbsoluteTime(timestamp) {
+            return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function drawGraph(samples) {
+            const context = graphCanvas.getContext('2d');
+            const width = graphCanvas.clientWidth || graphCanvas.width;
+            const height = graphCanvas.clientHeight || graphCanvas.height;
+            const scale = window.devicePixelRatio || 1;
+
+            graphCanvas.width = Math.floor(width * scale);
+            graphCanvas.height = Math.floor(height * scale);
+            context.setTransform(scale, 0, 0, scale, 0, 0);
+            context.clearRect(0, 0, width, height);
+
+            context.fillStyle = '#020617';
+            context.fillRect(0, 0, width, height);
+
+            const padding = { top: 20, right: 20, bottom: 38, left: 54 };
+            const plotWidth = width - padding.left - padding.right;
+            const plotHeight = height - padding.top - padding.bottom;
+
+            [
+                { start: 0, end: COLD_THRESHOLD, color: 'rgba(59, 130, 246, 0.10)' },
+                { start: COLD_THRESHOLD, end: DANGER_THRESHOLD, color: 'rgba(16, 185, 129, 0.12)' },
+                { start: DANGER_THRESHOLD, end: 100, color: 'rgba(239, 68, 68, 0.12)' }
+            ].forEach(zone => {
+                const yTop = padding.top + plotHeight - (zone.end / 100) * plotHeight;
+                const yBottom = padding.top + plotHeight - (zone.start / 100) * plotHeight;
+                context.fillStyle = zone.color;
+                context.fillRect(padding.left, yTop, plotWidth, yBottom - yTop);
+            });
+
+            context.strokeStyle = 'rgba(148, 163, 184, 0.18)';
+            context.lineWidth = 1;
+            for (let lineIndex = 0; lineIndex <= 5; lineIndex += 1) {
+                const y = padding.top + (plotHeight / 5) * lineIndex;
+                context.beginPath();
+                context.moveTo(padding.left, y);
+                context.lineTo(width - padding.right, y);
+                context.stroke();
+            }
+
+            context.fillStyle = '#94a3b8';
+            context.font = '12px sans-serif';
+            context.fillText('100', 14, padding.top + 4);
+            context.fillText('50', 20, padding.top + plotHeight / 2 + 4);
+            context.fillText('0', 28, padding.top + plotHeight + 4);
+
+            if (!samples.length) {
+                context.fillStyle = '#cbd5e1';
+                context.font = '700 18px sans-serif';
+                context.textAlign = 'center';
+                context.fillText('Waiting for the first live sample...', width / 2, height / 2);
+                context.textAlign = 'left';
+                return;
+            }
+
+            const firstTimestamp = samples[0].timestamp;
+            const lastTimestamp = samples[samples.length - 1].timestamp;
+            const span = Math.max(1, lastTimestamp - firstTimestamp);
+
+            context.lineWidth = 2.5;
+            context.strokeStyle = '#f8fafc';
+            context.beginPath();
+
+            samples.forEach((sample, index) => {
+                const x = padding.left + ((sample.timestamp - firstTimestamp) / span) * plotWidth;
+                const y = padding.top + plotHeight - (sample.pressure / 100) * plotHeight;
+                if (index === 0) {
+                    context.moveTo(x, y);
+                } else {
+                    context.lineTo(x, y);
+                }
+            });
+
+            context.stroke();
+
+            samples.forEach((sample, index) => {
+                if (index % Math.max(1, Math.floor(samples.length / 16)) !== 0 && index !== samples.length - 1) {
+                    return;
+                }
+
+                const x = padding.left + ((sample.timestamp - firstTimestamp) / span) * plotWidth;
+                const y = padding.top + plotHeight - (sample.pressure / 100) * plotHeight;
+                context.fillStyle = sample.zone === 'red' ? '#fca5a5' : sample.zone === 'green' ? '#86efac' : '#93c5fd';
+                context.beginPath();
+                context.arc(x, y, 3, 0, Math.PI * 2);
+                context.fill();
+            });
+
+            context.fillStyle = '#94a3b8';
+            context.textAlign = 'center';
+            context.fillText('Start', padding.left + 12, height - 12);
+            context.fillText('Now', width - padding.right - 12, height - 12);
+            context.textAlign = 'left';
+        }
+
+        function renderState(state) {
+            const currentState = state.state || 'idle';
+            const samples = state.graphSamples || [];
+            const summary = state.summary || null;
+            const statusLabel = currentState === 'active' ? 'Live' : currentState === 'completed' ? 'Completed' : 'Idle';
+
+            statusDot.className = `dot ${currentState}`;
+            statusText.textContent = statusLabel;
+            sessionPill.textContent = `Session: ${state.sessionId || 'none'}`;
+            samplePill.textContent = `Samples: ${summary ? summary.sampleCount : samples.length}`;
+
+            if (currentState === 'active') {
+                subtitle.textContent = `Monitoring live data from ${formatAbsoluteTime(state.startedAt)}.`;
+                details.textContent = `File: ${state.filePath}. This page updates continuously while the operator is logging.`;
+            } else if (currentState === 'completed') {
+                subtitle.textContent = `Latest session ended at ${formatAbsoluteTime(state.stoppedAt)}.`;
+                details.textContent = `The final report is still visible here until the next session starts.`;
+            } else {
+                subtitle.textContent = 'Waiting for a logging session to start.';
+                details.textContent = 'Leave this page open on a tablet, then start logging from the cabinet controls.';
+            }
+
+            const metricsData = summary ? [
+                ['Total time', formatDuration(summary.totalDurationMs)],
+                ['Green time', formatDuration(summary.greenDurationMs)],
+                ['Red time', formatDuration(summary.redDurationMs)],
+                ['Cold time', formatDuration(summary.coldDurationMs)],
+                ['Red touches', String(summary.redTouches)],
+                ['Time to move', summary.firstMovementMs === null ? 'No movement' : formatDuration(summary.firstMovementMs)],
+                ['Average pressure', `${summary.averagePressure.toFixed(1)}%`],
+                ['Peak pressure', `${summary.maxPressure.toFixed(1)}%`]
+            ] : [];
+
+            metrics.innerHTML = metricsData.map(([label, value]) => `
+                <div class="metric">
+                    <div class="label">${label}</div>
+                    <div class="value">${value}</div>
+                </div>
+            `).join('');
+
+            drawGraph(samples);
+        }
+
+        async function refresh() {
+            try {
+                const response = await fetch(`${serverBaseUrl}/logging/live`, { cache: 'no-store' });
+                const data = await response.json();
+                renderState(data);
+            } catch (error) {
+                statusDot.className = 'dot idle';
+                statusText.textContent = 'Offline';
+                subtitle.textContent = 'Could not reach the logging server.';
+                details.textContent = 'Check the operator tablet or server connection, then reload this page.';
+                metrics.innerHTML = '';
+                drawGraph([]);
+            }
+        }
+
+        refresh();
+        setInterval(refresh, 250);
+        window.addEventListener('resize', refresh);
+    </script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Story</title>
+    <style>
+        body { background-color: #000; margin: 0; overflow: hidden; font-family: sans-serif;}
+        /* Optional: Add a subtle hint if the video is waiting for sound */
+        #unmute-prompt {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 15px;
+            border-radius: 20px;
+            pointer-events: none;
+            font-family: sans-serif;
+            transition: opacity 0.5s;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="unmute-prompt">Tap anywhere for sound 🔊</div>
+
+    <!-- Keep muted, don't autoplay, and playsinline for Safari compatibility -->
+    <video id="story-video" muted playsinline style="width: 100%; height: 100vh; object-fit: cover;">
+        <source src="Ketelhuis.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <div style="position: absolute; bottom: 40px; width: 100%; text-align: center;">
+        <a href="cabinet.html" style="text-decoration: none; color: white; font-size: 24px; background-color: #007BFF; padding: 10px 20px; border-radius: 5px;">Ga door</a>
+    </div>
+
+    <script>
+        const video = document.getElementById('story-video');
+        const prompt = document.getElementById('unmute-prompt');
+
+        function enableSound() {
+            // Unmute and try to ensure it's playing
+            video.muted = false;
+            video.play();
+            
+            // Hide the prompt
+            prompt.style.opacity = '0';
+            
+            // Remove listeners so they don't fire again
+            window.removeEventListener('click', enableSound);
+            window.removeEventListener('touchstart', enableSound);
+        }
+
+        // Listen for the first touch/click to unlock audio
+        window.addEventListener('click', enableSound);
+        window.addEventListener('touchstart', enableSound);
+
+        // Safari sometimes pauses video if you unmute it without a fresh play() call
+        // This ensures the video stays running
+        video.addEventListener('volumechange', () => {
+            if (!video.muted && video.paused) {
+                video.play();
+            }
+        });
+    </script>
+</body>
+</html>

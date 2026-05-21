@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Valve Interaction</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+    <style>
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #050403;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+        }
+
+        #video-bg,
+        #three-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #video-bg {
+            object-fit: cover;
+            z-index: 0;
+            pointer-events: none;
+            background: radial-gradient(circle at center, #2a2218 0%, #060504 72%);
+        }
+
+        #three-canvas {
+            z-index: 1;
+            pointer-events: auto;
+        }
+
+        #ui-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .instructions {
+            position: absolute;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: min(92vw, 520px);
+            padding: 10px 14px;
+            border-radius: 12px;
+            background: rgba(16, 12, 8, 0.78);
+            color: #f5e4bd;
+            text-align: center;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        #status-message {
+            position: absolute;
+            left: 50%;
+            top: calc(50% + 68px);
+            transform: translateX(-50%);
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: rgba(24, 18, 12, 0.78);
+            color: #f2d8a3;
+            font-size: 13px;
+            min-width: 220px;
+            text-align: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        #status-message.visible {
+            opacity: 1;
+        }
+
+        #start-button {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: auto;
+            background: linear-gradient(135deg, #f7b731, #fa8231);
+            color: #111;
+            font-weight: 800;
+            border: none;
+            border-radius: 999px;
+            padding: 16px 28px;
+            font-size: 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        #start-button.hidden {
+            display: none;
+        }
+
+        .meters-container {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: min(22vw, 146px);
+            pointer-events: auto;
+        }
+
+        .steam-gauge {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 210 / 791;
+            background: url('images/meter.png') center center / contain no-repeat;
+            filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.4));
+        }
+
+        .steam-gauge::before {
+            content: '';
+            position: absolute;
+            inset: 4% 9% 6% 9%;
+            border-radius: 24px;
+            opacity: 0.92;
+        }
+
+        .steam-gauge-slot {
+            position: absolute;
+            left: 18%;
+            top: 11%;
+            width: 30%;
+            height: 73%;
+            border-radius: 999px;
+            background: linear-gradient(180deg, rgba(52, 40, 31, 0.94), rgba(19, 12, 8, 0.98));
+            border: 3px solid rgba(236, 206, 140, 0.62);
+            box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(89, 61, 31, 0.35);
+            overflow: hidden;
+        }
+
+        .steam-gauge-level {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            height: 0%;
+            border-radius: 999px;
+            background: linear-gradient(180deg, rgba(255, 245, 200, 0.95), rgba(236, 181, 97, 0.95) 28%, rgba(171, 103, 55, 0.98) 70%, rgba(97, 51, 30, 0.98) 100%);
+            box-shadow: inset 0 0 22px rgba(255, 245, 207, 0.22), 0 0 24px rgba(255, 190, 84, 0.22);
+            transition: height 0.08s ease-out;
+        }
+
+        .steam-gauge-glare {
+            position: absolute;
+            left: 23%;
+            top: 15%;
+            width: 8%;
+            height: 68%;
+            border-radius: 999px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.02));
+            opacity: 0.42;
+            pointer-events: none;
+        }
+
+        .steam-gauge-label {
+            position: absolute;
+            left: 50%;
+            top: -13px;
+            transform: translateX(-50%);
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, rgba(100, 68, 32, 0.95), rgba(43, 29, 18, 0.95));
+            border: 1px solid rgba(238, 204, 132, 0.65);
+            color: #f4ddb0;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-size: 11px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35);
+        }
+
+        .steam-gauge-readout {
+            position: absolute;
+            left: 50%;
+            bottom: 2%;
+            transform: translateX(-50%);
+            min-width: 64px;
+            padding: 5px 10px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(92, 58, 33, 0.96), rgba(39, 24, 15, 0.96));
+            border: 1px solid rgba(236, 206, 140, 0.58);
+            color: #fff1cf;
+            text-align: center;
+            font-weight: 900;
+            font-size: 18px;
+            letter-spacing: 0.04em;
+        }
+
+        .steam-gauge-gear {
+            position: absolute;
+            border-radius: 50%;
+            border: 3px solid rgba(236, 206, 140, 0.88);
+            background: radial-gradient(circle at center, rgba(58, 38, 21, 1) 0 28%, rgba(183, 138, 71, 1) 29% 36%, rgba(86, 56, 28, 1) 37% 100%);
+            box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.18), 0 10px 18px rgba(0, 0, 0, 0.35);
+        }
+
+        .steam-gauge-gear::before {
+            content: '';
+            position: absolute;
+            inset: -18%;
+            border-radius: 50%;
+            background: repeating-conic-gradient(from 0deg, rgba(236, 206, 140, 0.95) 0deg 11deg, rgba(86, 56, 28, 0.95) 11deg 22deg);
+            -webkit-mask: radial-gradient(circle, transparent 0 52%, #000 54%);
+            mask: radial-gradient(circle, transparent 0 52%, #000 54%);
+            opacity: 0.95;
+        }
+
+        .steam-gauge-gear--top {
+            width: 40px;
+            height: 40px;
+            left: 50%;
+            top: -13px;
+            transform: translateX(-50%);
+        }
+
+        .steam-gauge-gear--bottom-left {
+            width: 32px;
+            height: 32px;
+            left: 16%;
+            bottom: 6%;
+        }
+
+        .steam-gauge-gear--bottom-right {
+            width: 42px;
+            height: 42px;
+            right: 14%;
+            bottom: 6%;
+        }
+
+        .steam-gauge-dial {
+            position: absolute;
+            right: 15%;
+            bottom: 8%;
+            width: 24%;
+            height: 10%;
+            border-radius: 10px;
+            background: linear-gradient(180deg, rgba(117, 80, 49, 0.98), rgba(46, 28, 18, 0.98));
+            border: 2px solid rgba(236, 206, 140, 0.45);
+            box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.48);
+        }
+
+        .steam-gauge-dial::after {
+            content: '';
+            position: absolute;
+            inset: 16% 14%;
+            border-radius: 8px;
+            background: linear-gradient(180deg, rgba(172, 123, 87, 0.95), rgba(69, 41, 28, 0.95));
+            box-shadow: inset 0 0 10px rgba(255, 225, 179, 0.08);
+        }
+
+        @media (max-width: 768px) {
+            .meters-container {
+                width: min(26vw, 118px);
+                right: 10px;
+            }
+
+            #start-button {
+                font-size: 16px;
+                padding: 14px 24px;
+            }
+
+            .instructions {
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <video id="video-bg" autoplay playsinline muted webkit-playsinline></video>
+    <canvas id="three-canvas"></canvas>
+
+    <div id="ui-layer">
+        <button id="start-button">Start Experience</button>
+        <div id="timer" class="instructions" style="top:10px; left:50%; transform:translateX(-50%); max-width:160px;">02:00</div>
+        <div id="status-message"></div>
+
+        <div class="meters-container">
+            <div class="steam-gauge" aria-label="Steam pressure gauge">
+                <div class="steam-gauge-slot">
+                    <div id="steam-fill" class="steam-gauge-level"></div>
+                    <div class="steam-gauge-glare"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+// --- AUDIO SETUP ---
+const audio = new Audio('sounds/bg.mp3');
+audio.loop = true;
+
+// Define steamHissing so the unlocker doesn't crash
+const steamHissing = new Audio('sounds/steam_hiss.mp3'); 
+steamHissing.loop = false;
+
+let isAudioUnlocked = false;
+
+// Game timer settings
+const GAME_DURATION_MS = 120000; // 2 minutes
+const SLIP_START_MS = 30000; // after 30 seconds start slips
+let gameStartTime = 0;
+let timerIntervalId = null;
+let slipIntervalId = null;
+
+const unlock = () => {
+    if (isAudioUnlocked) return;
+
+    // "Prime" the audio for mobile/Safari
+    [audio, steamHissing].forEach(track => {
+        track.play().then(() => {
+            track.pause();
+            track.currentTime = 0;
+        }).catch(e => console.log("Unlock failed:", e));
+    });
+
+    isAudioUnlocked = true;
+    window.removeEventListener('click', unlock);
+    window.removeEventListener('touchstart', unlock);
+};
+
+window.addEventListener('click', unlock);
+window.addEventListener('touchstart', unlock);
+
+// More robust unlock helper that attempts to play & keep audio ready when called
+async function tryUnlockAudio() {
+    if (isAudioUnlocked) return true;
+    const tracks = [audio, steamHissing];
+    let unlocked = false;
+    for (const t of tracks) {
+        try {
+            // try playing once from a direct user gesture
+            await t.play();
+            t.pause();
+            t.currentTime = 0;
+            unlocked = true;
+        } catch (e) {
+            // ignore; browser blocked
+        }
+    }
+    if (unlocked) {
+        isAudioUnlocked = true;
+        window.removeEventListener('click', unlock);
+        window.removeEventListener('touchstart', unlock);
+    }
+    return unlocked;
+}
+
+// --- THREE.JS SETUP ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+
+// TILTED CAMERA: Moved position up and back, added lookAt center
+camera.position.set(0, 1.5, 4.5); 
+camera.lookAt(0, -0.5, 0); // Tilts the "head" down towards the valves
+
+const renderer = new THREE.WebGLRenderer({ 
+    canvas: document.getElementById('three-canvas'), 
+    alpha: true, 
+    antialias: true
+});
+renderer.setPixelRatio(window.devicePixelRatio || 1);
+renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000, 0);
+        renderer.shadowMap.enabled = true;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1.15));
+
+        const keyLight = new THREE.DirectionalLight(0xfff3dd, 1.35);
+        keyLight.position.set(3, 5, 6);
+        scene.add(keyLight);
+
+        const fillLight = new THREE.DirectionalLight(0xa8d7ff, 0.5);
+        fillLight.position.set(-4, 2, 3);
+        scene.add(fillLight);
+
+        const rigRoot = new THREE.Group();
+        rigRoot.visible = false;
+        scene.add(rigRoot);
+
+        const valveStates = { valve1: 0, valve2: 0 };
+        // Resistance state controls how 'stiff' a valve is when interacting.
+        // multiplier > 1 makes the wheel respond slower to dragging (needs more drag).
+        const valveResistance = {
+            valve1: { active: false, multiplier: 1, endTime: 0, phase: Math.random() * Math.PI * 2 },
+            valve2: { active: false, multiplier: 1, endTime: 0, phase: Math.random() * Math.PI * 2 }
+        };
+        const wheelMeshes = {};
+        const loader = new THREE.GLTFLoader();
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        const serverBaseUrl = window.location.origin && window.location.origin !== 'null'
+            ? window.location.origin
+            : `https://${window.location.hostname}:3000`;
+        let selectedWheelKey = null;
+        let lastPointerX = 0;
+        let dragging = false;
+        let animationStarted = false;
+
+        function showStatus(message, isError = false) {
+            const statusMessage = document.getElementById('status-message');
+            statusMessage.textContent = message;
+            statusMessage.style.color = isError ? '#ffcb9a' : '#f2d8a3';
+            statusMessage.classList.add('visible');
+        }
+
+        function hideStatus() {
+            document.getElementById('status-message').classList.remove('visible');
+        }
+
+function updateSteamGauge() {
+    const combinedPercentage = Math.round((valveStates.valve1 + valveStates.valve2) / 2);
+    const fillElement = document.getElementById('steam-fill');
+    const readoutElement = document.getElementById('steam-value');
+
+    if (fillElement) fillElement.style.height = `${combinedPercentage}%`;
+    if (readoutElement) readoutElement.textContent = `${combinedPercentage}%`;
+
+    // Dynamic Volume/Playback based on gauge
+    if (animationStarted && isAudioUnlocked) {
+        steamHissing.volume = combinedPercentage / 100;
+        if (combinedPercentage > 5 && steamHissing.paused) {
+            steamHissing.play();
+        }
+    }
+}
+
+        function updateWheelRotation(wheelKey, percentage, shouldSync = true) {
+            valveStates[wheelKey] = Math.max(0, Math.min(100, percentage));
+            const wheelGroup = wheelMeshes[wheelKey];
+            if (wheelGroup) {
+                // Store base angle on the object — visual vibration will be applied during animation frame.
+                const angle = (valveStates[wheelKey] / 100) * Math.PI * 2;
+                wheelGroup.userData.baseAngle = angle;
+            }
+
+            updateSteamGauge();
+
+            if (shouldSync) {
+                fetch(`${serverBaseUrl}/valve-state`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [wheelKey]: valveStates[wheelKey] })
+                }).catch((error) => {
+                    console.error('Failed to sync valve state', error);
+                });
+            }
+        }
+
+        function loadModel(url, position, scale, wheelKey, rotationY = 0) {
+            return new Promise((resolve, reject) => {
+                loader.load(url, (gltf) => {
+                    const pivot = new THREE.Group();
+                    pivot.position.copy(position);
+                    pivot.scale.setScalar(scale);
+                    pivot.rotation.y = rotationY;
+                    pivot.userData.wheelKey = wheelKey;
+
+                    const group = gltf.scene;
+                    const bounds = new THREE.Box3().setFromObject(group);
+                    const center = new THREE.Vector3();
+                    bounds.getCenter(center);
+                    group.position.sub(center);
+
+                    pivot.add(group);
+                    rigRoot.add(pivot);
+                    wheelMeshes[wheelKey] = pivot;
+                    resolve(pivot);
+                }, undefined, reject);
+            });
+        }
+
+        async function buildScene() {
+            await Promise.all([
+                // make sure they face forward tilted a bit to match the camera angle
+                loadModel('models/base.glb', new THREE.Vector3(0, -0.75, 0), 1.30, 'base', Math.PI / 2),
+                loadModel('models/wheelleft.glb', new THREE.Vector3(-0.93, -0.24, 0.4), 1.1, 'valve1'),
+                loadModel('models/wheelright.glb', new THREE.Vector3(0.93, -0.24, 0.4), 1.1, 'valve2')
+            ]);
+
+            rigRoot.visible = true;
+        }
+
+        function setPointerFromEvent(event) {
+            pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function getWheelUnderPointer(event) {
+            setPointerFromEvent(event);
+            raycaster.setFromCamera(pointer, camera);
+            const targets = [wheelMeshes.valve1, wheelMeshes.valve2].filter(Boolean);
+            const intersections = raycaster.intersectObjects(targets, true);
+
+            if (!intersections.length) {
+                return null;
+            }
+
+            let node = intersections[0].object;
+            while (node && !node.userData.wheelKey) {
+                node = node.parent;
+            }
+
+            return node && node.userData.wheelKey ? node.userData.wheelKey : null;
+        }
+
+        function onPointerDown(event) {
+            if (!animationStarted) {
+                return;
+            }
+
+            const wheelKey = getWheelUnderPointer(event);
+            if (!wheelKey || wheelKey === 'base') {
+                return;
+            }
+
+            dragging = true;
+            selectedWheelKey = wheelKey;
+            lastPointerX = event.clientX;
+            // Small chance to trigger a temporary resistance on pointer down
+            maybeTriggerResistance(wheelKey);
+            event.preventDefault();
+        }
+
+        function onPointerMove(event) {
+            if (!dragging || !selectedWheelKey) {
+                return;
+            }
+
+            const deltaX = event.clientX - lastPointerX;
+            lastPointerX = event.clientX;
+
+            // If resistance is active, reduce the effect of pointer movement so the valve
+            // opens/closes more slowly — player must drag more to overcome it.
+            const res = valveResistance[selectedWheelKey];
+            const effectiveMultiplier = res && res.active ? res.multiplier : 1;
+            const sensitivity = 0.35 / effectiveMultiplier;
+            const nextPercentage = valveStates[selectedWheelKey] + deltaX * sensitivity;
+            updateWheelRotation(selectedWheelKey, nextPercentage, true);
+            event.preventDefault();
+        }
+
+        function onPointerUp() {
+            dragging = false;
+            selectedWheelKey = null;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update resistance states (expire timers)
+            const now = Date.now();
+            for (const key of Object.keys(valveResistance)) {
+                const r = valveResistance[key];
+                if (r.active && now > r.endTime) {
+                    r.active = false;
+                    r.multiplier = 1;
+                }
+            }
+
+            // Apply rotation + optional vibration per wheel
+            const t = performance.now() / 1000;
+            const jitterReport = {};
+            for (const key of Object.keys(wheelMeshes)) {
+                // only apply valve math to actual valve wheels
+                if (!Object.prototype.hasOwnProperty.call(valveStates, key)) continue;
+                const g = wheelMeshes[key];
+                if (!g) continue;
+                const baseAngle = (valveStates[key] / 100) * Math.PI * 2;
+                const r = valveResistance[key];
+                let vib = 0;
+                if (r && r.active) {
+                    // amplitude scales with how strong the multiplier is
+                    const amp = 0.06 * Math.min(1.8, r.multiplier);
+                    const freq = 30 + (r.multiplier - 1) * 12; // faster when stiffer
+                    vib = Math.sin(t * freq + r.phase) * amp;
+                }
+                g.rotation.y = (g.userData.baseAngle !== undefined ? g.userData.baseAngle : baseAngle) + vib;
+                jitterReport[key] = Math.abs(vib);
+            }
+
+            // Occasionally send jitter info to server so the cabinet UI can reflect needle jitter.
+            try {
+                if (!window._lastJitterSync) window._lastJitterSync = 0;
+                const nowMs = Date.now();
+                const JITTER_SYNC_INTERVAL = 300; // ms
+                const MIN_JITTER_TO_REPORT = 0.003; // radians
+                const anyJitter = Object.values(jitterReport).some(v => v > MIN_JITTER_TO_REPORT);
+                if (anyJitter && nowMs - window._lastJitterSync > JITTER_SYNC_INTERVAL) {
+                    window._lastJitterSync = nowMs;
+                    fetch(`${serverBaseUrl}/valve-state`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ valve1: valveStates.valve1, valve2: valveStates.valve2, jitter: jitterReport })
+                    }).catch(() => {});
+                }
+            } catch (e) {
+                // silence
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function maybeTriggerResistance(wheelKey) {
+            const r = valveResistance[wheelKey];
+            if (!r) return;
+            // 28% chance to get a stiff valve on pointerdown
+            if (r.active) return;
+            if (Math.random() < 0.28) {
+                const duration = 1200 + Math.random() * 2800; // 1.2s - 4s
+                r.multiplier = 1.8 + Math.random() * 1.6; // ~1.8 - 3.4
+                r.endTime = Date.now() + duration;
+                r.active = true;
+                r.phase = Math.random() * Math.PI * 2;
+                showStatus('Valve is stiff — apply more force!', false);
+                setTimeout(hideStatus, 1600);
+            }
+        }
+
+        function updateTimerDisplay() {
+            const el = document.getElementById('timer');
+            if (!el || !gameStartTime) return;
+            const elapsed = Date.now() - gameStartTime;
+            const remaining = Math.max(0, GAME_DURATION_MS - elapsed);
+            const seconds = Math.floor(remaining / 1000);
+            const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+            const ss = String(seconds % 60).padStart(2, '0');
+            el.textContent = `${mm}:${ss}`;
+
+            if (remaining <= 0) {
+                endGame();
+            } else if (remaining <= 10000) {
+                el.style.background = 'rgba(120,20,20,0.9)';
+            }
+        }
+
+        function maybeSlipValves(elapsed) {
+            // small chance each tick to make a valve slip back slightly
+            // scale probability slowly over time after slip start
+            const sinceSlipStart = Math.max(0, elapsed - SLIP_START_MS);
+            const timeFactor = Math.min(1, sinceSlipStart / (GAME_DURATION_MS - SLIP_START_MS));
+
+            const baseChance = 0.12; // base per-check chance
+            const chance = baseChance + (0.18 * timeFactor); // grows a bit over time
+
+            // pick random valve(s)
+            ['valve1', 'valve2'].forEach((key) => {
+                if (!wheelMeshes[key]) return;
+                if (Math.random() < chance) {
+                    const slipAmount = 3 + Math.random() * 8; // 3-11 percent
+                    const next = Math.max(0, valveStates[key] - slipAmount);
+                    updateWheelRotation(key, next, true);
+                    showStatus('Valve slipped back!', false);
+                    setTimeout(hideStatus, 900);
+                    // small chance to also trigger a temporary stiff resistance
+                    if (Math.random() < 0.25) {
+                        valveResistance[key].active = true;
+                        valveResistance[key].multiplier = 1.6 + Math.random() * 1.6;
+                        valveResistance[key].endTime = Date.now() + (600 + Math.random() * 1800);
+                    }
+                }
+            });
+        }
+
+        function endGame() {
+            if (timerIntervalId) {
+                clearInterval(timerIntervalId);
+                timerIntervalId = null;
+            }
+            if (slipIntervalId) {
+                clearInterval(slipIntervalId);
+                slipIntervalId = null;
+            }
+            animationStarted = false;
+            isAudioUnlocked && audio.pause();
+            isAudioUnlocked && steamHissing.pause();
+            showStatus("Time's up — experience ended.", false);
+            document.getElementById('timer').textContent = '00:00';
+            // reveal restart button
+            const btn = document.getElementById('start-button');
+            btn.textContent = 'Restart';
+            btn.classList.remove('hidden');
+        }
+
+        async function syncInitialValveState() {
+            try {
+                const response = await fetch(`${serverBaseUrl}/valve-state`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const state = await response.json();
+                if (typeof state.valve1 === 'number') {
+                    updateWheelRotation('valve1', state.valve1, false);
+                }
+                if (typeof state.valve2 === 'number') {
+                    updateWheelRotation('valve2', state.valve2, false);
+                }
+            } catch (error) {
+                console.error('Failed to fetch initial valve state', error);
+            }
+        }
+
+async function startExperience() {
+    if (animationStarted) return;
+
+    // Attempt to unlock audio directly from this user gesture (Safari-friendly)
+    await tryUnlockAudio();
+
+    animationStarted = true;
+    document.getElementById('start-button').classList.add('hidden');
+    hideStatus();
+
+    // START AUDIO
+    if (isAudioUnlocked) {
+        audio.currentTime = 0;
+        audio.play().catch(e => console.log("Music play failed:", e));
+        audio.volume = 0.4;
+    } else {
+        // If still locked, show a hint so the user can tap to enable sound
+        showStatus('Tap the screen to enable audio.', false);
+        setTimeout(hideStatus, 2200);
+    }
+
+    try {
+        await buildScene();
+        await syncInitialValveState();
+        animate();
+    } catch (error) {
+        console.error('Failed to load models', error);
+    }
+
+    // Start game timer
+    gameStartTime = Date.now();
+    updateTimerDisplay();
+    timerIntervalId = setInterval(updateTimerDisplay, 250);
+
+    // Slip checking runs frequently but only acts after SLIP_START_MS
+    slipIntervalId = setInterval(() => {
+        const elapsed = Date.now() - gameStartTime;
+        if (elapsed >= SLIP_START_MS) maybeSlipValves(elapsed);
+    }, 700);
+
+            try {
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    const video = document.getElementById('video-bg');
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: { ideal: 'environment' },
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        },
+                        audio: false
+                    });
+
+                    video.srcObject = stream;
+                    video.playsInline = true;
+                    video.setAttribute('playsinline', 'true');
+                    video.setAttribute('webkit-playsinline', 'true');
+                    await video.play();
+                } else {
+                    setStatus('This device does not support camera access in the browser.', true);
+                }
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                setStatus('Camera access failed. Use HTTPS and allow camera permission.', true);
+            }
+        }
+
+        document.getElementById('start-button').addEventListener('click', startExperience);
+        window.addEventListener('pointerdown', onPointerDown, { passive: false });
+        window.addEventListener('pointermove', onPointerMove, { passive: false });
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('pointercancel', onPointerUp);
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        updateSteamGauge();
+    </script>
+</body>
+</html>

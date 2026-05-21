@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Industrial Console Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        /* The main cabinet background */
+        #cabinet-container {
+            position: relative;
+            width: 100vw;
+            height: 50.15vw; /* Aspect ratio of the original image */
+            max-height: 100vh;
+            max-width: 199.4vh;
+            margin: auto;
+            background-image: url('images/cabinet.png');
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8) inset;
+        }
+
+        /* Screen flash effect */
+        #warning-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0;
+            transition: opacity 0.1s;
+            border: 20px solid red;
+            box-shadow: inset 0 0 100px rgba(255, 0, 0, 0.5);
+        }
+
+        @keyframes pulse-red {
+            0% { opacity: 0; }
+            50% { opacity: 0.7; }
+            100% { opacity: 0; }
+        }
+
+        .danger-flash {
+            animation: pulse-red 0.5s infinite;
+        }
+
+        /* Light overlay for green zone */
+        #light-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('images/cabinetlightoverlay.png');
+            background-size: cover;
+            background-position: center;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 5;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        @keyframes light-flicker {
+            0% { opacity: 0; }
+            10% { opacity: 1; }
+            20% { opacity: 0.3; }
+            30% { opacity: 1; }
+            40% { opacity: 0.5; }
+            50% { opacity: 1; }
+            60% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
+        .light-flickering {
+            animation: light-flicker 0.6s ease-in-out forwards;
+        }
+
+        .light-on {
+            opacity: 1;
+        }
+
+        /* Shaking effect */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+
+        .shaking {
+            animation: shake 0.2s infinite;
+        }
+
+        /* The central meter overlay */
+        .meter-overlay {
+            position: absolute;
+            /* Positioning relative to the cabinet image's central circle */
+            top: 16.4%; 
+            left: 42.3%;
+            width: 15.5%;
+            height: 31.8%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle, #f0f0f0 0%, #d1d1d1 100%);
+            overflow: hidden;
+        }
+
+        .gauge-svg {
+            width: 90%;
+            height: 90%;
+        }
+
+        .needle {
+            transition: transform 0.15s cubic-bezier(0.17, 0.67, 0.83, 0.67);
+            transform-origin: 100px 100px;
+        }
+
+        /* Controls UI */
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #444;
+            color: white;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 300px;
+        }
+
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .status-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+
+        .bg-safe { background: #10b981; }
+        .bg-danger { background: #ef4444; }
+
+        /* Settings Cog Button */
+        #settings-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #666;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 101;
+            transition: all 0.3s ease;
+        }
+
+        #settings-btn:hover {
+            background: rgba(0,0,0,0.95);
+            border-color: #aaa;
+            transform: rotate(20deg);
+        }
+
+        #settings-btn svg {
+            width: 28px;
+            height: 28px;
+            stroke: #ccc;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        /* Settings Modal */
+        #settings-modal {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            background: rgba(0,0,0,0.95);
+            border: 1px solid #666;
+            border-radius: 12px;
+            padding: 20px;
+            z-index: 101;
+            color: white;
+            min-width: 200px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+        }
+
+        #settings-modal.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .difficulty-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .difficulty-btn {
+            padding: 10px 15px;
+            border: 1px solid #444;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+
+        .difficulty-btn:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: #666;
+        }
+
+        .difficulty-btn.active {
+            background: #10b981;
+            border-color: #10b981;
+        }
+
+        .logging-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .logging-btn {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #2563eb;
+            background: linear-gradient(180deg, rgba(37,99,235,0.9), rgba(29,78,216,0.9));
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+            text-align: center;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.82rem;
+        }
+
+        .logging-btn.secondary {
+            border-color: #b91c1c;
+            background: linear-gradient(180deg, rgba(220,38,38,0.95), rgba(153,27,27,0.95));
+        }
+
+        .logging-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+        }
+
+        .logging-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .logging-status {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #a3a3a3;
+            line-height: 1.4;
+        }
+
+        #log-report-panel {
+            position: fixed;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(92vw, 980px);
+            max-height: calc(100vh - 32px);
+            overflow: auto;
+            background: rgba(4, 6, 12, 0.97);
+            border: 1px solid rgba(148, 163, 184, 0.24);
+            border-radius: 16px;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7);
+            color: white;
+            z-index: 160;
+            padding: 16px;
+            display: none;
+        }
+
+        #log-report-panel.visible {
+            display: block;
+        }
+
+        .log-report-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .log-report-title {
+            font-size: 1rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .log-report-subtitle {
+            margin-top: 4px;
+            color: #94a3b8;
+            font-size: 0.88rem;
+        }
+
+        .log-report-close {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            background: rgba(15, 23, 42, 0.9);
+            color: white;
+            cursor: pointer;
+        }
+
+        .log-graph {
+            width: 100%;
+            height: 320px;
+            display: block;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(3, 7, 18, 0.98));
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 14px;
+        }
+
+        .log-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .log-metric {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 12px;
+            padding: 10px 12px;
+        }
+
+        .log-metric-label {
+            color: #94a3b8;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .log-metric-value {
+            margin-top: 5px;
+            font-size: 1rem;
+            font-weight: 800;
+        }
+
+        .log-file-path {
+            margin-top: 8px;
+            color: #94a3b8;
+            font-size: 0.8rem;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center">
+
+    <div id="warning-overlay"></div>
+
+    <svg style="display: none;">
+        <defs>
+            <filter id="cold-filter">
+                <feColorMatrix type="saturate" values="0.8" />
+                <feComponentTransfer>
+                    <feFuncR type="linear" slope="0.6" />
+                    <feFuncG type="linear" slope="0.6" />
+                    <feFuncB type="linear" slope="0.6" />
+                </feComponentTransfer>
+            </filter>
+        </defs>
+    </svg>
+
+    <div id="cabinet-container">
+        <!-- Light Overlay -->
+        <div id="light-overlay"></div>
+        
+        <!-- Central Meter Overlay -->
+        <div class="meter-overlay">
+            <svg class="gauge-svg" viewBox="0 0 200 200">
+                <!-- Gauge Background Scale -->
+                <path d="M 40 150 A 80 80 0 1 1 160 150" fill="none" stroke="#333" stroke-width="2" />
+                
+                <!-- Tick Marks -->
+                <line x1="40" y1="150" x2="30" y2="155" stroke="#333" stroke-width="2" />
+                <line x1="100" y1="20" x2="100" y2="10" stroke="#333" stroke-width="2" />
+                <line x1="160" y1="150" x2="170" y2="155" stroke="#333" stroke-width="2" />
+                
+                <!-- Blue Zone (Cold - too low) -->
+                <path d="M 40 150 A 80 80 0 0 1 45 45" fill="none" stroke="#3b82f6" stroke-width="8" stroke-opacity="0.6" />
+                
+                <!-- Green Zone (Good - middle) -->
+                <path d="M 45 45 A 80 80 0 0 1 155 45" fill="none" stroke="#10b981" stroke-width="8" stroke-opacity="0.6" />
+                
+                <!-- Red Zone (Hot/Danger) -->
+                <path d="M 155 45 A 80 80 0 0 1 160 150" fill="none" stroke="red" stroke-width="8" stroke-opacity="0.5" />
+                
+                <!-- Gauge Text -->
+                <text x="100" y="140" text-anchor="middle" font-family="monospace" font-size="12" fill="#555">DRUK</text>
+                <text x="50" y="165" text-anchor="middle" font-family="monospace" font-size="10" fill="#888">0</text>
+                <text x="155" y="165" text-anchor="middle" font-family="monospace" font-size="10" fill="#888">100</text>
+
+                <!-- Needle Pin -->
+                <circle cx="100" cy="100" r="6" fill="#222" />
+
+                <!-- The Needle -->
+                <line id="needle" class="needle" x1="100" y1="100" x2="100" y2="30" stroke="#d63031" stroke-width="6" stroke-linecap="round" />
+            </svg>
+        </div>
+    </div>
+
+    <!-- Settings Button -->
+    <button id="settings-btn">
+        <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m6.08 0l4.24-4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m6.08 0l4.24 4.24"/>
+            <circle cx="12" cy="5" r="1.5" opacity="0.5"/>
+            <circle cx="5" cy="12" r="1.5" opacity="0.5"/>
+            <circle cx="19" cy="12" r="1.5" opacity="0.5"/>
+            <circle cx="12" cy="19" r="1.5" opacity="0.5"/>
+        </svg>
+    </button>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal">
+        <div style="margin-bottom: 15px; font-weight: bold;">DIFFICULTY</div>
+        <div class="difficulty-buttons">
+            <button class="difficulty-btn active" data-difficulty="easy">Easy</button>
+            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+        </div>
+
+        <div style="margin: 16px 0 10px; font-weight: bold;">LOGGING</div>
+        <div class="logging-actions">
+            <button id="start-log-btn" class="logging-btn">Start</button>
+            <button id="stop-log-btn" class="logging-btn secondary" disabled>Stop</button>
+        </div>
+        <div class="logging-actions" style="margin-top: 8px;">
+            <a href="log-monitor.html" target="_blank" rel="noopener noreferrer" class="logging-btn" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">
+                Live View
+            </a>
+        </div>
+        <div id="logging-status" class="logging-status">No active log session.</div>
+    </div>
+
+    <div id="log-report-panel" aria-live="polite">
+        <div class="log-report-header">
+            <div>
+                <div class="log-report-title">Parsed Log</div>
+                <div id="log-report-subtitle" class="log-report-subtitle">No log session yet.</div>
+            </div>
+            <button id="close-report-btn" class="log-report-close">Close</button>
+        </div>
+        <canvas id="log-graph" class="log-graph" width="960" height="320"></canvas>
+        <div id="log-metrics" class="log-metrics"></div>
+        <div id="log-file-path" class="log-file-path"></div>
+    </div>
+
+    <!-- UI Controls -->
+    <div class="controls shadow-2xl">
+        <div class="flex justify-between items-center">
+            <span class="text-sm font-bold tracking-widest uppercase text-gray-400">Druk besturing</span>
+            <span id="status-text" class="status-badge bg-safe">PRIMA</span>
+        </div>
+        <input type="range" id="throttle" min="0" max="100" value="30">
+        <div class="flex justify-between text-xs text-gray-500">
+            <span>UIT</span>
+            <span>AAN</span>
+            <span>MAX</span>
+        </div>
+    </div>
+    <script>
+const throttle = document.getElementById('throttle');
+const needle = document.getElementById('needle');
+const container = document.getElementById('cabinet-container');
+const warning = document.getElementById('warning-overlay');
+const statusText = document.getElementById('status-text');
+const startLogBtn = document.getElementById('start-log-btn');
+const stopLogBtn = document.getElementById('stop-log-btn');
+const loggingStatus = document.getElementById('logging-status');
+const logReportPanel = document.getElementById('log-report-panel');
+const logReportSubtitle = document.getElementById('log-report-subtitle');
+const logGraphCanvas = document.getElementById('log-graph');
+const logMetrics = document.getElementById('log-metrics');
+const logFilePath = document.getElementById('log-file-path');
+const closeReportBtn = document.getElementById('close-report-btn');
+const serverBaseUrl = window.location.origin && window.location.origin !== 'null'
+    ? window.location.origin
+    : `https://${window.location.hostname}:3000`;
+
+// jitter info reported by interaction client (radians)
+let serverJitter = { valve1: 0, valve2: 0 };
+
+// Audio setup
+const audio = new Audio('sounds/whistle.mp3');
+const steamHissing = new Audio('sounds/steam_hiss.mp3');
+const lightOnSound = new Audio('sounds/lightson.mp3');
+const bulbPop = new Audio('sounds/bulbpops.mp3');
+audio.loop = true; // Loop the siren/whistle while in danger
+
+let isAudioUnlocked = false;
+// Bulb / red exposure tracking
+let redStreakStart = null;
+let attemptedBurnout = false;
+let bulbBurned = false;
+const BURNOUT_TRIGGER_MS = 3000; // ms spent in red before a burnout roll
+const MAX_BULB_OPACITY = 1.0;
+
+const lightOverlay = document.getElementById('light-overlay');
+
+// 1. STICKY UNLOCK: Safari requires a direct user interaction
+const unlock = () => {
+    if (isAudioUnlocked) return;
+
+    // Play and immediately pause both sounds to "prime" them
+    audio.play().then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+    }).catch(e => console.log("Unlock failed:", e));
+
+    steamHissing.play().then(() => {
+        steamHissing.pause();
+        steamHissing.currentTime = 0;
+    }).catch(e => console.log("Unlock failed:", e));
+
+    // Prime the lights-on sound as well so it can play after user interaction
+    lightOnSound.play().then(() => {
+        lightOnSound.pause();
+        lightOnSound.currentTime = 0;
+    }).catch(e => console.log("Unlock failed:", e));
+
+    // Prime bulb pop sound
+    bulbPop.play().then(() => {
+        bulbPop.pause();
+        bulbPop.currentTime = 0;
+    }).catch(e => console.log("Unlock failed:", e));
+
+    isAudioUnlocked = true;
+    
+    // Cleanup listeners
+    window.removeEventListener('click', unlock);
+    window.removeEventListener('touchstart', unlock);
+};
+
+// Listen for any interaction on the window to unlock audio
+window.addEventListener('click', unlock);
+window.addEventListener('touchstart', unlock);
+
+// Try unlocking audio directly from a user gesture (more reliable in Safari)
+async function tryUnlockAudio() {
+    if (isAudioUnlocked) return true;
+    const tracks = [audio, steamHissing, lightOnSound, bulbPop];
+    let unlocked = false;
+    for (const t of tracks) {
+        try {
+            await t.play();
+            t.pause();
+            t.currentTime = 0;
+            unlocked = true;
+        } catch (e) {
+            // ignore
+        }
+    }
+    if (unlocked) {
+        isAudioUnlocked = true;
+        window.removeEventListener('click', unlock);
+        window.removeEventListener('touchstart', unlock);
+    }
+    return unlocked;
+}
+
+// Attach to obvious interactive controls so the first direct gesture unlocks audio
+// (Listeners attached after DOM elements are declared further below)
+
+let wasInDanger = false;
+let wasInGreen = false;
+let flickerTimeout = null;
+let playTimeout = null;
+let playUnlockHandler = null;
+let loggingSession = null;
+let loggingRequestInFlight = false;
+const DANGER_THRESHOLD = 80;
+const COLD_THRESHOLD = 30;
+let currentDifficulty = 'medium';
+
+// Difficulty settings: width of green zone in SVG units (out of 160-40=120 units)
+const difficultySettings = {
+    easy: { leftX: 30, rightX: 170, label: 'Easy' },      // Very wide green zone
+    medium: { leftX: 45, rightX: 155, label: 'Medium' },  // Current medium zone
+    hard: { leftX: 55, rightX: 145, label: 'Hard' }       // Narrow green zone
+};
+
+// Settings modal functions
+const settingsBtn = document.getElementById('settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const difficultyBtns = document.querySelectorAll('.difficulty-btn');
+
+settingsBtn.addEventListener('click', () => {
+    settingsModal.classList.toggle('active');
+});
+
+// Attach audio unlock handlers now that `settingsBtn` exists
+throttle.addEventListener('pointerdown', () => tryUnlockAudio(), { once: true });
+settingsBtn.addEventListener('click', () => tryUnlockAudio(), { once: true });
+
+// Close modal when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#settings-btn') && !e.target.closest('#settings-modal')) {
+        settingsModal.classList.remove('active');
+    }
+});
+
+difficultyBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        // Update active button
+        difficultyBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // Update difficulty
+        currentDifficulty = btn.getAttribute('data-difficulty');
+        updateGreenZone();
+    });
+});
+
+function updateGreenZone() {
+    const settings = difficultySettings[currentDifficulty];
+    const greenZonePath = document.querySelector('path[stroke="#10b981"]');
+    if (greenZonePath) {
+        // Create new path with updated positions
+        const y = 55;
+        greenZonePath.setAttribute('d', `M ${settings.leftX} ${y} A 80 80 0 0 1 ${settings.rightX} ${y}`);
+    }
+}
+
+function getPressureZone(pressure) {
+    if (pressure >= DANGER_THRESHOLD) {
+        return 'red';
+    }
+
+    if (pressure <= COLD_THRESHOLD) {
+        return 'cold';
+    }
+
+    return 'green';
+}
+
+function formatDuration(ms) {
+    const totalSeconds = Math.max(0, ms) / 1000;
+
+    if (totalSeconds < 60) {
+        return `${totalSeconds.toFixed(totalSeconds < 10 ? 1 : 0)}s`;
+    }
+
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = (totalSeconds % 60).toFixed(1).padStart(4, '0');
+    return `${minutes}m ${seconds}s`;
+}
+
+function buildLogSummary(samples, startedAt, stoppedAt) {
+    if (!samples.length) {
+        return {
+            totalDurationMs: Math.max(0, stoppedAt - startedAt),
+            greenDurationMs: 0,
+            redDurationMs: 0,
+            coldDurationMs: 0,
+            redTouches: 0,
+            firstMovementMs: null,
+            averagePressure: 0,
+            maxPressure: 0,
+            sampleCount: 0
+        };
+    }
+
+    let greenDurationMs = 0;
+    let redDurationMs = 0;
+    let coldDurationMs = 0;
+    let redTouches = 0;
+    let firstMovementMs = null;
+    let weightedPressureSum = 0;
+    let maxPressure = 0;
+    const baselinePressure = samples[0].pressure;
+
+    samples.forEach((sample, index) => {
+        const nextTimestamp = samples[index + 1] ? samples[index + 1].timestamp : stoppedAt;
+        const deltaMs = Math.max(0, nextTimestamp - sample.timestamp);
+        const zone = sample.zone || getPressureZone(sample.pressure);
+        const previousZone = index > 0 ? (samples[index - 1].zone || getPressureZone(samples[index - 1].pressure)) : null;
+
+        if (zone === 'green') {
+            greenDurationMs += deltaMs;
+        } else if (zone === 'red') {
+            redDurationMs += deltaMs;
+        } else {
+            coldDurationMs += deltaMs;
+        }
+
+        if (zone === 'red' && (index === 0 || previousZone !== 'red')) {
+            redTouches += 1;
+        }
+
+        if (firstMovementMs === null && Math.abs(sample.pressure - baselinePressure) >= 2) {
+            firstMovementMs = Math.max(0, sample.timestamp - startedAt);
+        }
+
+        weightedPressureSum += sample.pressure * deltaMs;
+        maxPressure = Math.max(maxPressure, sample.pressure);
+    });
+
+    const totalDurationMs = Math.max(0, stoppedAt - startedAt);
+
+    return {
+        totalDurationMs,
+        greenDurationMs,
+        redDurationMs,
+        coldDurationMs,
+        redTouches,
+        firstMovementMs,
+        averagePressure: totalDurationMs > 0 ? weightedPressureSum / totalDurationMs : samples[0].pressure,
+        maxPressure,
+        sampleCount: samples.length
+    };
+}
+
+function drawLogGraph(samples) {
+    const canvas = logGraphCanvas;
+    const context = canvas.getContext('2d');
+    const width = canvas.clientWidth || canvas.width;
+    const height = canvas.clientHeight || canvas.height;
+    const scale = window.devicePixelRatio || 1;
+
+    canvas.width = Math.floor(width * scale);
+    canvas.height = Math.floor(height * scale);
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    context.clearRect(0, 0, width, height);
+
+    context.fillStyle = '#020617';
+    context.fillRect(0, 0, width, height);
+
+    const padding = { top: 20, right: 18, bottom: 32, left: 44 };
+    const plotWidth = width - padding.left - padding.right;
+    const plotHeight = height - padding.top - padding.bottom;
+    const zones = [
+        { top: 0, bottom: COLD_THRESHOLD, color: 'rgba(59, 130, 246, 0.10)' },
+        { top: COLD_THRESHOLD, bottom: DANGER_THRESHOLD, color: 'rgba(16, 185, 129, 0.12)' },
+        { top: DANGER_THRESHOLD, bottom: 100, color: 'rgba(239, 68, 68, 0.12)' }
+    ];
+
+    zones.forEach(zone => {
+        const zoneTop = padding.top + plotHeight - (zone.bottom / 100) * plotHeight;
+        const zoneBottom = padding.top + plotHeight - (zone.top / 100) * plotHeight;
+        context.fillStyle = zone.color;
+        context.fillRect(padding.left, zoneTop, plotWidth, zoneBottom - zoneTop);
+    });
+
+    context.strokeStyle = 'rgba(148, 163, 184, 0.22)';
+    context.lineWidth = 1;
+    for (let lineIndex = 0; lineIndex <= 5; lineIndex += 1) {
+        const y = padding.top + (plotHeight / 5) * lineIndex;
+        context.beginPath();
+        context.moveTo(padding.left, y);
+        context.lineTo(width - padding.right, y);
+        context.stroke();
+    }
+
+    context.fillStyle = '#94a3b8';
+    context.font = '12px sans-serif';
+    context.fillText('100', 12, padding.top + 4);
+    context.fillText('50', 20, padding.top + plotHeight / 2 + 4);
+    context.fillText('0', 28, padding.top + plotHeight + 4);
+
+    if (!samples.length) {
+        context.fillStyle = '#cbd5e1';
+        context.font = '700 16px sans-serif';
+        context.textAlign = 'center';
+        context.fillText('No log samples available yet.', width / 2, height / 2);
+        context.textAlign = 'left';
+        return;
+    }
+
+    const firstTimestamp = samples[0].timestamp;
+    const lastTimestamp = samples[samples.length - 1].timestamp;
+    const totalSpan = Math.max(1, lastTimestamp - firstTimestamp);
+
+    context.lineWidth = 2.5;
+    context.strokeStyle = '#e2e8f0';
+    context.beginPath();
+
+    samples.forEach((sample, index) => {
+        const x = padding.left + ((sample.timestamp - firstTimestamp) / totalSpan) * plotWidth;
+        const y = padding.top + plotHeight - (sample.pressure / 100) * plotHeight;
+
+        if (index === 0) {
+            context.moveTo(x, y);
+        } else {
+            context.lineTo(x, y);
+        }
+    });
+
+    context.stroke();
+
+    context.fillStyle = '#f8fafc';
+    samples.forEach((sample, index) => {
+        if (index % Math.max(1, Math.floor(samples.length / 18)) !== 0 && index !== samples.length - 1) {
+            return;
+        }
+
+        const x = padding.left + ((sample.timestamp - firstTimestamp) / totalSpan) * plotWidth;
+        const y = padding.top + plotHeight - (sample.pressure / 100) * plotHeight;
+        context.beginPath();
+        context.arc(x, y, 2.5, 0, Math.PI * 2);
+        context.fill();
+    });
+
+    context.fillStyle = '#94a3b8';
+    context.textAlign = 'center';
+    context.fillText('Start', padding.left + 8, height - 10);
+    context.fillText(formatDuration(lastTimestamp), width - padding.right - 8, height - 10);
+    context.textAlign = 'left';
+}
+
+function renderLogReport(report) {
+    const { summary, graphSamples, filePath: reportFilePath, sessionId } = report;
+
+    logReportSubtitle.textContent = `Session ${sessionId} • ${formatDuration(summary.totalDurationMs)} • ${summary.sampleCount} samples`;
+    logFilePath.textContent = `Saved to ${reportFilePath}`;
+    logMetrics.innerHTML = `
+        <div class="log-metric">
+            <div class="log-metric-label">Green time</div>
+            <div class="log-metric-value">${formatDuration(summary.greenDurationMs)}</div>
+        </div>
+        <div class="log-metric">
+            <div class="log-metric-label">Red touches</div>
+            <div class="log-metric-value">${summary.redTouches}</div>
+        </div>
+        <div class="log-metric">
+            <div class="log-metric-label">Red time</div>
+            <div class="log-metric-value">${formatDuration(summary.redDurationMs)}</div>
+        </div>
+        <div class="log-metric">
+            <div class="log-metric-label">Time to move</div>
+            <div class="log-metric-value">${summary.firstMovementMs === null ? 'No movement' : formatDuration(summary.firstMovementMs)}</div>
+        </div>
+        <div class="log-metric">
+            <div class="log-metric-label">Average pressure</div>
+            <div class="log-metric-value">${summary.averagePressure.toFixed(1)}%</div>
+        </div>
+        <div class="log-metric">
+            <div class="log-metric-label">Peak pressure</div>
+            <div class="log-metric-value">${summary.maxPressure.toFixed(1)}%</div>
+        </div>
+    `;
+
+    logReportPanel.classList.add('visible');
+    drawLogGraph(graphSamples.map(sample => ({
+        ...sample,
+        timestamp: sample.timestamp
+    })));
+}
+
+function updateLoggingUi() {
+    if (loggingSession) {
+        startLogBtn.disabled = true;
+        stopLogBtn.disabled = false;
+        loggingStatus.textContent = `Logging to ${loggingSession.fileName}`;
+    } else {
+        startLogBtn.disabled = false;
+        stopLogBtn.disabled = true;
+        loggingStatus.textContent = 'No active log session.';
+    }
+}
+
+async function startLogging() {
+    if (loggingSession) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${serverBaseUrl}/logging/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initialPressure: Number.parseFloat(throttle.value) || 0 })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to start logging');
+        }
+
+        loggingSession = {
+            sessionId: data.sessionId,
+            fileName: data.fileName,
+            startedAt: data.startedAt
+        };
+        logReportPanel.classList.remove('visible');
+        updateLoggingUi();
+        await queueLogSample(true);
+    } catch (error) {
+        console.error('Could not start logging', error);
+        loggingStatus.textContent = 'Could not start logging.';
+    }
+}
+
+async function queueLogSample(force = false) {
+    if (!loggingSession || loggingRequestInFlight) {
+        return;
+    }
+
+    const pressure = Number.parseFloat(throttle.value) || 0;
+    const payload = {
+        sessionId: loggingSession.sessionId,
+        timestamp: Date.now(),
+        pressure,
+        zone: getPressureZone(pressure)
+    };
+
+    loggingRequestInFlight = true;
+
+    try {
+        const response = await fetch(`${serverBaseUrl}/logging/sample`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok && !force) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || 'Failed to log sample');
+        }
+    } catch (error) {
+        if (!force) {
+            console.error('Could not log sample', error);
+        }
+    } finally {
+        loggingRequestInFlight = false;
+    }
+}
+
+async function stopLogging() {
+    if (!loggingSession) {
+        return;
+    }
+
+    const sessionId = loggingSession.sessionId;
+    loggingSession = null;
+    updateLoggingUi();
+
+    try {
+        const response = await fetch(`${serverBaseUrl}/logging/stop`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to stop logging');
+        }
+
+        renderLogReport(data.report);
+    } catch (error) {
+        console.error('Could not stop logging', error);
+        loggingStatus.textContent = 'Stopped locally, but parsing failed.';
+    }
+}
+
+function updateGauge() {
+    const targetPressure = Number.parseFloat(throttle.value) || 0;
+    
+    const jitter = targetPressure > 70 ? (Math.random() - 0.5) * 2 : 0;
+    const displayPressure = targetPressure + jitter;
+    let rotation = (displayPressure / 100) * 240 - 120;
+
+    // Apply server-reported wobble (convert radians->degrees)
+    const serverAmp = ((serverJitter.valve1 || 0) + (serverJitter.valve2 || 0)) / 2;
+    if (serverAmp > 0) {
+        const ampDeg = serverAmp * (180 / Math.PI);
+        const serverJitterDeg = (Math.random() - 0.5) * 2 * ampDeg;
+        rotation += serverJitterDeg;
+    }
+
+    needle.style.transform = `rotate(${rotation}deg)`;
+
+    let isInDanger = targetPressure >= DANGER_THRESHOLD;
+    let isInCold = targetPressure <= COLD_THRESHOLD;
+    let isInGreen = targetPressure > COLD_THRESHOLD && targetPressure < DANGER_THRESHOLD;
+    const lightOverlay = document.getElementById('light-overlay');
+
+    // --- Audio Logic ---
+    if (isAudioUnlocked) {
+        // Transition: Just entered Danger Zone
+        if (isInDanger && !wasInDanger) {
+            audio.currentTime = 0;
+            audio.play();
+        } 
+        // Transition: Just left Danger Zone
+        else if (!isInDanger && wasInDanger) {
+            audio.pause();
+            steamHissing.currentTime = 0;
+            steamHissing.play();
+        }
+    }
+
+    // --- UI Effects ---
+    if (isInDanger) {
+        container.classList.add('shaking');
+        warning.classList.add('danger-flash');
+        statusText.innerText = 'KRITIEK!';
+        statusText.className = 'status-badge bg-danger';
+    } else {
+        container.classList.remove('shaking');
+        warning.classList.remove('danger-flash');
+        statusText.innerText = 'PRIMA';
+        statusText.className = 'status-badge bg-safe';
+    }
+
+    // --- Cold Zone Darkening (SVG Filter) ---
+    if (isInCold) {
+        container.style.filter = 'url(#cold-filter)';
+    } else {
+        container.style.filter = 'none';
+    }
+
+    // --- Green Zone Light Effect ---
+    if (isInGreen) {
+        // If bulb was previously marked as burned, clear the cosmetic state
+        // when the player returns to green so lights behave normally again.
+        if (bulbBurned) {
+            bulbBurned = false;
+            attemptedBurnout = false;
+            redStreakStart = null;
+            lightOverlay.style.opacity = '';
+            container.style.filter = 'none';
+            statusText.innerText = 'PRIMA';
+            statusText.className = 'status-badge bg-safe';
+        }
+
+        if (!wasInGreen) {
+            // Just entered green zone - start flicker animation immediately,
+            // then play the lights-on sound halfway through the flicker so it lines up.
+            const startFlicker = () => {
+                lightOverlay.classList.remove('light-on');
+                lightOverlay.classList.remove('light-flickering');
+                // Trigger reflow to restart animation
+                void lightOverlay.offsetWidth;
+                lightOverlay.classList.add('light-flickering');
+                // After flicker completes, add light-on class to keep light visible
+                clearTimeout(flickerTimeout);
+                flickerTimeout = setTimeout(() => {
+                    lightOverlay.classList.add('light-on');
+                }, 600);
+            };
+
+            // Clear any previous scheduled tasks
+            clearTimeout(flickerTimeout);
+            clearTimeout(playTimeout);
+            if (playUnlockHandler) {
+                window.removeEventListener('click', playUnlockHandler);
+                window.removeEventListener('touchstart', playUnlockHandler);
+                playUnlockHandler = null;
+            }
+
+            // Start flicker now
+            startFlicker();
+
+            // Schedule the lights-on sound to play halfway through the flicker (300ms)
+            const midpointDelay = 100;
+            playTimeout = setTimeout(() => {
+                if (isAudioUnlocked) {
+                    try {
+                        lightOnSound.currentTime = 0;
+                        lightOnSound.play().catch(() => {});
+                    } catch (e) {
+                        console.log('Could not play lights-on sound:', e);
+                    }
+                } else {
+                    // If audio not unlocked yet, play as soon as user interacts
+                    playUnlockHandler = () => {
+                        try {
+                            lightOnSound.currentTime = 0;
+                            lightOnSound.play().catch(() => {});
+                        } catch (e) {
+                            console.log('Could not play lights-on sound on unlock:', e);
+                        }
+                        playUnlockHandler = null;
+                    };
+                    window.addEventListener('click', playUnlockHandler, { once: true });
+                    window.addEventListener('touchstart', playUnlockHandler, { once: true });
+                }
+            }, midpointDelay);
+        }
+    } else {
+        // Exited green zone - turn light off and clear scheduled audio
+        clearTimeout(flickerTimeout);
+        clearTimeout(playTimeout);
+        if (playUnlockHandler) {
+            window.removeEventListener('click', playUnlockHandler);
+            window.removeEventListener('touchstart', playUnlockHandler);
+            playUnlockHandler = null;
+        }
+        lightOverlay.classList.remove('light-on');
+        lightOverlay.classList.remove('light-flickering');
+    }
+
+    // --- Red exposure and burnout handling ---
+    if (isInDanger) {
+        if (!redStreakStart) redStreakStart = Date.now();
+        const redDuration = Date.now() - redStreakStart;
+
+        if (!bulbBurned) {
+            // Gradually increase the visible brightness of the light overlay
+            // as the red exposure duration grows.
+            const base = 0.12; // starting overlay opacity while in red
+            const scaled = base + Math.min(1, redDuration / 8000);
+            lightOverlay.style.opacity = Math.min(MAX_BULB_OPACITY, scaled).toFixed(3);
+
+            // Once we've been in red long enough, attempt a single burnout roll
+            if (!attemptedBurnout && redDuration > BURNOUT_TRIGGER_MS) {
+                attemptedBurnout = true;
+                if (Math.random() < 1 / 2) {
+                            // Burnout occurs
+                            triggerBulbBurn();
+                }
+            }
+        } else {
+            // Bulb is burned: keep the overlay dark
+            lightOverlay.style.opacity = '0';
+            container.style.filter = 'brightness(0.12)';
+        }
+    } else {
+        // Reset red streak tracking when leaving danger
+        redStreakStart = null;
+        attemptedBurnout = false;
+        if (!bulbBurned) {
+            // Clear any inline style so green logic can control opacity
+            lightOverlay.style.opacity = '';
+            container.style.filter = 'none';
+        }
+    }
+
+    wasInDanger = isInDanger;
+    wasInGreen = isInGreen;
+
+    if (loggingSession) {
+        queueLogSample();
+    }
+}
+
+updateGauge();
+
+function triggerBulbBurn() {
+    // Play bulb pop sound (if unlocked)
+    try {
+        bulbPop.currentTime = 0;
+        bulbPop.play().catch(() => {});
+    } catch (e) {}
+
+    // Quick white flash to simulate bulb blowing
+    warning.style.transition = 'opacity 0.06s linear';
+    const prevBg = warning.style.background;
+    warning.style.background = '#ffffff';
+    warning.style.opacity = '1';
+
+    setTimeout(() => {
+        warning.style.opacity = '0';
+        setTimeout(() => {
+            // mark bulb as burned and apply persistent darkening
+            bulbBurned = true;
+            lightOverlay.style.opacity = '0';
+            container.style.filter = 'brightness(0.12)';
+            statusText.innerText = 'LAMP KAPOT';
+            statusText.className = 'status-badge bg-danger';
+
+            // restore warning defaults
+            warning.style.background = prevBg || '';
+            warning.style.transition = '';
+        }, 90);
+    }, 120);
+}
+
+// Sync with valve states from interaction.html
+setInterval(() => {
+        fetch(`${serverBaseUrl}/valve-state`)
+        .then(res => res.json())
+        .then(data => {
+            // Use the average of both valves to control the cabinet gauge
+            const avgPressure = (data.valve1 + data.valve2) / 2;
+            throttle.value = avgPressure;
+            // read jitter if reported (radians)
+            if (data.jitter) {
+                    serverJitter = { valve1: data.jitter.valve1 || 0, valve2: data.jitter.valve2 || 0 };
+            } else {
+                    serverJitter = { valve1: 0, valve2: 0 };
+            }
+            updateGauge();
+        })
+    .catch(e => console.log('Sync server unavailable:', e));
+}, 100); // Poll every 100ms for responsive updates
+
+startLogBtn.addEventListener('click', startLogging);
+stopLogBtn.addEventListener('click', stopLogging);
+closeReportBtn.addEventListener('click', () => {
+    logReportPanel.classList.remove('visible');
+});
+
+updateLoggingUi();
+    </script>
+</body>
+</html>

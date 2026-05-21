@@ -1,0 +1,3 @@
+{"type":"session-start","sessionId":"log-2026-05-18T11-06-07-618Z-v9fq3g","startedAt":1779102367618,"initialPressure":12}
+{"type":"sample","timestamp":1000,"pressure":12,"zone":"cold"}
+{"type":"session-stop","sessionId":"log-2026-05-18T11-06-07-618Z-v9fq3g","stoppedAt":1779102373647,"summary":{"totalDurationMs":6029,"greenDurationMs":0,"redDurationMs":0,"coldDurationMs":1779102372647,"redTouches":0,"firstMovementMs":null,"averagePressure":3541089479.47653,"maxPressure":12,"sampleCount":1}}
