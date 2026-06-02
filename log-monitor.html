@@ -228,33 +228,33 @@
     <main class="page">
         <section class="topbar">
             <div>
-                <div class="title">Live Log Monitor</div>
-                <div id="subtitle" class="subtitle">Waiting for a logging session to start.</div>
+                <div class="title">Live logboekmonitor</div>
+                <div id="subtitle" class="subtitle">Wachten tot een logsessie begint.</div>
             </div>
             <div class="status-row">
-                <div class="pill"><span id="status-dot" class="dot idle"></span><span id="status-text">Idle</span></div>
-                <div class="pill" id="session-pill">Session: none</div>
-                <div class="pill" id="sample-pill">Samples: 0</div>
+                <div class="pill"><span id="status-dot" class="dot idle"></span><span id="status-text">Inactief</span></div>
+                <div class="pill" id="session-pill">Sessie: geen</div>
+                <div class="pill" id="sample-pill">Monsters: 0</div>
             </div>
         </section>
 
         <section class="grid">
             <article class="panel">
-                <h2>Live Graph</h2>
+                <h2>Live grafiek</h2>
                 <div class="graph-wrap">
                     <canvas id="graph" width="1200" height="720"></canvas>
                 </div>
             </article>
 
             <aside class="panel">
-                <h2>Live Metrics</h2>
+                <h2>Live metrische gegevens</h2>
                 <div class="metrics" id="metrics"></div>
                 <div class="zones" aria-label="Zones">
-                    <span class="zone-chip cold">Cold</span>
-                    <span class="zone-chip green">Green</span>
-                    <span class="zone-chip red">Red</span>
+                    <span class="zone-chip cold">Koud</span>
+                    <span class="zone-chip green">Groen</span>
+                    <span class="zone-chip red">Rood</span>
                 </div>
-                <div class="details" id="details">Open this page on a tablet while logging is running.</div>
+                <div class="details" id="details">Open deze pagina op een tablet terwijl loggen actief is.</div>
             </aside>
         </section>
     </main>
@@ -347,7 +347,7 @@
                 context.fillStyle = '#cbd5e1';
                 context.font = '700 18px sans-serif';
                 context.textAlign = 'center';
-                context.fillText('Waiting for the first live sample...', width / 2, height / 2);
+                context.fillText('Wachten op het eerste live monster...', width / 2, height / 2);
                 context.textAlign = 'left';
                 return;
             }
@@ -388,7 +388,7 @@
             context.fillStyle = '#94a3b8';
             context.textAlign = 'center';
             context.fillText('Start', padding.left + 12, height - 12);
-            context.fillText('Now', width - padding.right - 12, height - 12);
+            context.fillText('Nu', width - padding.right - 12, height - 12);
             context.textAlign = 'left';
         }
 
@@ -396,33 +396,33 @@
             const currentState = state.state || 'idle';
             const samples = state.graphSamples || [];
             const summary = state.summary || null;
-            const statusLabel = currentState === 'active' ? 'Live' : currentState === 'completed' ? 'Completed' : 'Idle';
+            const statusLabel = currentState === 'active' ? 'Live' : currentState === 'completed' ? 'Voltooid' : 'Inactief';
 
             statusDot.className = `dot ${currentState}`;
             statusText.textContent = statusLabel;
-            sessionPill.textContent = `Session: ${state.sessionId || 'none'}`;
-            samplePill.textContent = `Samples: ${summary ? summary.sampleCount : samples.length}`;
+            sessionPill.textContent = `Sessie: ${state.sessionId || 'geen'}`;
+            samplePill.textContent = `Monsters: ${summary ? summary.sampleCount : samples.length}`;
 
             if (currentState === 'active') {
-                subtitle.textContent = `Monitoring live data from ${formatAbsoluteTime(state.startedAt)}.`;
-                details.textContent = `File: ${state.filePath}. This page updates continuously while the operator is logging.`;
+                subtitle.textContent = `Live gegevens worden gemonitord sinds ${formatAbsoluteTime(state.startedAt)}.`;
+                details.textContent = `Bestand: ${state.filePath}. Deze pagina wordt continu bijgewerkt terwijl de operator loggt.`;
             } else if (currentState === 'completed') {
-                subtitle.textContent = `Latest session ended at ${formatAbsoluteTime(state.stoppedAt)}.`;
-                details.textContent = `The final report is still visible here until the next session starts.`;
+                subtitle.textContent = `Laatste sessie is beëindigd om ${formatAbsoluteTime(state.stoppedAt)}.`;
+                details.textContent = `Het definitieve rapport is hier nog zichtbaar totdat de volgende sessie begint.`;
             } else {
-                subtitle.textContent = 'Waiting for a logging session to start.';
-                details.textContent = 'Leave this page open on a tablet, then start logging from the cabinet controls.';
+                subtitle.textContent = 'Wachten tot een logsessie begint.';
+                details.textContent = 'Laat deze pagina open op een tablet en start vervolgens het loggen van de kastbediening.';
             }
 
             const metricsData = summary ? [
-                ['Total time', formatDuration(summary.totalDurationMs)],
-                ['Green time', formatDuration(summary.greenDurationMs)],
-                ['Red time', formatDuration(summary.redDurationMs)],
-                ['Cold time', formatDuration(summary.coldDurationMs)],
-                ['Red touches', String(summary.redTouches)],
-                ['Time to move', summary.firstMovementMs === null ? 'No movement' : formatDuration(summary.firstMovementMs)],
-                ['Average pressure', `${summary.averagePressure.toFixed(1)}%`],
-                ['Peak pressure', `${summary.maxPressure.toFixed(1)}%`]
+                ['Totale tijd', formatDuration(summary.totalDurationMs)],
+                ['Groene tijd', formatDuration(summary.greenDurationMs)],
+                ['Rode tijd', formatDuration(summary.redDurationMs)],
+                ['Koude tijd', formatDuration(summary.coldDurationMs)],
+                ['Rode aanrakingen', String(summary.redTouches)],
+                ['Tijd tot beweging', summary.firstMovementMs === null ? 'Geen beweging' : formatDuration(summary.firstMovementMs)],
+                ['Gemiddelde druk', `${summary.averagePressure.toFixed(1)}%`],
+                ['Piekdruk', `${summary.maxPressure.toFixed(1)}%`]
             ] : [];
 
             metrics.innerHTML = metricsData.map(([label, value]) => `
@@ -443,8 +443,8 @@
             } catch (error) {
                 statusDot.className = 'dot idle';
                 statusText.textContent = 'Offline';
-                subtitle.textContent = 'Could not reach the logging server.';
-                details.textContent = 'Check the operator tablet or server connection, then reload this page.';
+                subtitle.textContent = 'Kon de logging server niet bereiken.';
+                details.textContent = 'Controleer het operator-tablet of de serververbinding en laad deze pagina opnieuw.';
                 metrics.innerHTML = '';
                 drawGraph([]);
             }

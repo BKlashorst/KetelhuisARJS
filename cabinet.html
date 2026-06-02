@@ -461,33 +461,33 @@
 
     <!-- Settings Modal -->
     <div id="settings-modal">
-        <div style="margin-bottom: 15px; font-weight: bold;">DIFFICULTY</div>
+        <div style="margin-bottom: 15px; font-weight: bold;">MOEILIJKHEIDSGRAAD</div>
         <div class="difficulty-buttons">
-            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
-            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
-            <button class="difficulty-btn" data-difficulty="hard">Hard</button>
+            <button class="difficulty-btn" data-difficulty="easy">Makkelijk</button>
+            <button class="difficulty-btn" data-difficulty="medium">Gemiddeld</button>
+            <button class="difficulty-btn" data-difficulty="hard">Moeilijk</button>
         </div>
 
-        <div style="margin: 16px 0 10px; font-weight: bold;">LOGGING</div>
+        <div style="margin: 16px 0 10px; font-weight: bold;">LOGGEN</div>
         <div class="logging-actions">
-            <button id="start-log-btn" class="logging-btn">Start</button>
-            <button id="stop-log-btn" class="logging-btn secondary" disabled>Stop</button>
+            <button id="start-log-btn" class="logging-btn">Starten</button>
+            <button id="stop-log-btn" class="logging-btn secondary" disabled>Stoppen</button>
         </div>
         <div class="logging-actions" style="margin-top: 8px;">
             <a href="log-monitor.html" target="_blank" rel="noopener noreferrer" class="logging-btn" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">
-                Live View
+                Live weergave
             </a>
         </div>
-        <div id="logging-status" class="logging-status">No active log session.</div>
+        <div id="logging-status" class="logging-status">Geen actieve logsessie.</div>
     </div>
 
     <div id="log-report-panel" aria-live="polite">
         <div class="log-report-header">
             <div>
-                <div class="log-report-title">Parsed Log</div>
-                <div id="log-report-subtitle" class="log-report-subtitle">No log session yet.</div>
+                <div class="log-report-title">Geparsed logboek</div>
+                <div id="log-report-subtitle" class="log-report-subtitle">Nog geen logsessie.</div>
             </div>
-            <button id="close-report-btn" class="log-report-close">Close</button>
+            <button id="close-report-btn" class="log-report-close">Sluiten</button>
         </div>
         <canvas id="log-graph" class="log-graph" width="960" height="320"></canvas>
         <div id="log-metrics" class="log-metrics"></div>
