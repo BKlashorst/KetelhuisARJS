@@ -533,8 +533,9 @@ let serverJitter = { valve1: 0, valve2: 0 };
 const audio = new Audio('sounds/whistle.mp3');
 const steamHissing = new Audio('sounds/steam_hiss.mp3');
 const lightOnSound = new Audio('sounds/lightson.mp3');
-const bulbPop = new Audio('sounds/bulbpops.mp3');
+let bulbPop = new Audio('sounds/bulbpops.mp3');
 audio.loop = true; // Loop the siren/whistle while in danger
+bulbPop.volume = 0.8; // Set bulb pop volume
 
 let isAudioUnlocked = false;
 // Bulb / red exposure tracking
@@ -567,7 +568,7 @@ const unlock = () => {
         lightOnSound.currentTime = 0;
     }).catch(e => console.log("Unlock failed:", e));
 
-    // Prime bulb pop sound
+    // Prime bulb pop sound with extra care
     bulbPop.play().then(() => {
         bulbPop.pause();
         bulbPop.currentTime = 0;
@@ -578,6 +579,7 @@ const unlock = () => {
     // Cleanup listeners
     window.removeEventListener('click', unlock);
     window.removeEventListener('touchstart', unlock);
+    console.log('Audio system unlocked via user interaction');
 };
 
 // Listen for any interaction on the window to unlock audio
@@ -591,18 +593,27 @@ async function tryUnlockAudio() {
     let unlocked = false;
     for (const t of tracks) {
         try {
-            await t.play();
+            // Ensure audio is paused before attempting to play
+            t.pause();
+            t.currentTime = 0;
+            // Attempt play from user gesture context
+            const playPromise = t.play();
+            if (playPromise !== undefined) {
+                await playPromise;
+            }
             t.pause();
             t.currentTime = 0;
             unlocked = true;
         } catch (e) {
-            // ignore
+            // ignore; browser blocked
+            console.log('Audio unlock attempt failed for', t.src);
         }
     }
     if (unlocked) {
         isAudioUnlocked = true;
         window.removeEventListener('click', unlock);
         window.removeEventListener('touchstart', unlock);
+        console.log('Audio unlocked successfully');
     }
     return unlocked;
 }
@@ -1227,10 +1238,28 @@ updateGauge();
 
 function triggerBulbBurn() {
     // Play bulb pop sound (if unlocked)
-    try {
-        bulbPop.currentTime = 0;
-        bulbPop.play().catch(() => {});
-    } catch (e) {}
+    if (isAudioUnlocked) {
+        try {
+            // Pause and fully reset the audio before playing
+            bulbPop.pause();
+            bulbPop.currentTime = 0;
+            
+            // Create a new audio instance to ensure clean playback
+            // (workaround for browser audio playback restrictions)
+            const newBulbPop = new Audio('sounds/bulbpops.mp3');
+            newBulbPop.volume = 0.8;
+            newBulbPop.play().catch(error => {
+                console.log('Bulb pop playback failed:', error);
+                // Fallback: try the original audio object
+                bulbPop.play().catch(err => console.log('Fallback play also failed:', err));
+            });
+            
+            // Keep reference to new instance for potential next play
+            bulbPop = newBulbPop;
+        } catch (e) {
+            console.error('Bulb pop error:', e);
+        }
+    }
 
     // Quick white flash to simulate bulb blowing
     warning.style.transition = 'opacity 0.06s linear';
