@@ -519,6 +519,17 @@ renderer.setSize(window.innerWidth, window.innerHeight);
         scene.add(rigRoot);
 
         const valveStates = { valve1: 0, valve2: 0 };
+        // Restore valve states from localStorage if available
+        const savedValveStates = localStorage.getItem('valveStates');
+        if (savedValveStates) {
+            try {
+                const parsed = JSON.parse(savedValveStates);
+                valveStates.valve1 = parsed.valve1 || 0;
+                valveStates.valve2 = parsed.valve2 || 0;
+            } catch (e) {
+                console.log('Could not parse saved valve states');
+            }
+        }
         // Resistance state controls how 'stiff' a valve is when interacting.
         // multiplier > 1 makes the wheel respond slower to dragging (needs more drag).
         const valveResistance = {
@@ -575,6 +586,13 @@ function updateSteamGauge() {
             }
 
             updateSteamGauge();
+            
+            // Save to localStorage for persistence
+            try {
+                localStorage.setItem('valveStates', JSON.stringify(valveStates));
+            } catch (e) {
+                console.log('Could not save valve states to localStorage');
+            }
 
             if (shouldSync) {
                 fetch(`${serverBaseUrl}/valve-state`, {
@@ -608,6 +626,30 @@ function updateSteamGauge() {
                     resolve(pivot);
                 }, undefined, reject);
             });
+        }
+
+        function cleanupScene() {
+            // Remove all old meshes from the scene and dispose their resources
+            for (const key of Object.keys(wheelMeshes)) {
+                const mesh = wheelMeshes[key];
+                if (mesh) {
+                    // Recursively dispose all geometries and materials
+                    mesh.traverse((child) => {
+                        if (child.geometry) {
+                            child.geometry.dispose();
+                        }
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(mat => mat.dispose());
+                            } else {
+                                child.material.dispose();
+                            }
+                        }
+                    });
+                    rigRoot.remove(mesh);
+                    delete wheelMeshes[key];
+                }
+            }
         }
 
         async function buildScene() {
@@ -822,6 +864,19 @@ function updateSteamGauge() {
             const finalValve2 = Math.round(valveStates.valve2);
             const finalAverage = Math.round((finalValve1 + finalValve2) / 2);
             
+            // Save final stats to localStorage for persistence
+            try {
+                const finalStats = {
+                    valve1: finalValve1,
+                    valve2: finalValve2,
+                    average: finalAverage,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem('finalStats', JSON.stringify(finalStats));
+            } catch (e) {
+                console.log('Could not save final stats to localStorage');
+            }
+            
             document.getElementById('final-valve1').textContent = `${finalValve1}%`;
             document.getElementById('final-valve2').textContent = `${finalValve2}%`;
             document.getElementById('final-average').textContent = `${finalAverage}%`;
@@ -856,6 +911,9 @@ function updateSteamGauge() {
 async function startExperience() {
     if (animationStarted) return;
 
+    // Clean up old scene meshes to prevent memory leak
+    cleanupScene();
+
     // Reset end screen and show start button again
     document.getElementById('end-screen').classList.remove('visible');
     const metersContainer = document.querySelector('.meters-container');
@@ -867,6 +925,13 @@ async function startExperience() {
     // Reset valve states
     valveStates.valve1 = 0;
     valveStates.valve2 = 0;
+    // Also reset in localStorage for new session
+    try {
+        localStorage.setItem('valveStates', JSON.stringify(valveStates));
+    } catch (e) {
+        console.log('Could not reset valve states in localStorage');
+    }
+    
     for (const key of Object.keys(wheelMeshes)) {
         if (Object.prototype.hasOwnProperty.call(valveStates, key)) {
             const g = wheelMeshes[key];
@@ -951,6 +1016,29 @@ async function startExperience() {
         });
 
         updateSteamGauge();
+        
+        // Restore final stats from previous session if available
+        try {
+            const savedFinalStats = localStorage.getItem('finalStats');
+            if (savedFinalStats) {
+                const stats = JSON.parse(savedFinalStats);
+                document.getElementById('final-valve1').textContent = `${stats.valve1}%`;
+                document.getElementById('final-valve2').textContent = `${stats.valve2}%`;
+                document.getElementById('final-average').textContent = `${stats.average}%`;
+                // Check if end-screen is already visible from a previous session
+                const endScreen = document.getElementById('end-screen');
+                if (endScreen && endScreen.classList.contains('visible')) {
+                    // Stats are already showing
+                } else if (window.location.hash === '#show-stats') {
+                    // If we have a hash flag, show the stats
+                    endScreen.classList.add('visible');
+                    document.querySelector('.meters-container').style.opacity = '0.3';
+                    document.querySelector('.meters-container').style.pointerEvents = 'none';
+                }
+            }
+        } catch (e) {
+            console.log('Could not restore final stats from localStorage');
+        }
     </script>
 </body>
 </html>
